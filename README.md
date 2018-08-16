@@ -1,0 +1,2 @@
+# SixChess
+sixChess practice project
