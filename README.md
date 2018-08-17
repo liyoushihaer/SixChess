@@ -1,2 +1,2 @@
-# SixChess
-sixChess practice project
+# hello-world
+Hello world new project template.
