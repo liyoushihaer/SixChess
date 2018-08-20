@@ -12,6 +12,10 @@ cc.Class({
     onLoad: function () {
 
     },
+    getPosIndex:function()
+    {
+        return this._posIndex;
+    },
 
     setPosIndex:function(index)
     {
@@ -35,6 +39,11 @@ cc.Class({
 
     onNodeBeTouch:function()
     {
+        if(this._page.getSelfColor()!= this.color)
+        {
+            return;
+        }
+        
         this._page.setSelectChess(this);
     },
 
