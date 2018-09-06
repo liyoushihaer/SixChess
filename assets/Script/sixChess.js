@@ -36,7 +36,7 @@ cc.Class({
     {
         return this._selfColor;
     },
-    // use this for initialization
+
     onLoad: function () {
         this.blackInitPos = [8,11,12,13,14,15];
         this.whiteInitPos = [0,1,2,3,4,7];
@@ -46,13 +46,15 @@ cc.Class({
     
     initChess:function()
     {
-        if(!this.chessArray)
+        if(!this.chessMapWihte)
         {
-            this.chessArray = [];
+            this.chessMapWihte = new Map();
         }
-        this.chessArray.length =16;
-        this.chessArray.fill(null);
-        this._roundPlayerColor=global.GameColor.white;
+        if(!this.chessMapBlack)
+        {
+            this.chessMapBlack = new Map();
+        }
+        this._roundPlayerColor= global.GameColor.white;
     },
 
     calculatePos:function()
@@ -88,16 +90,17 @@ cc.Class({
         let pos = this.boardNode.convertToNodeSpaceAR(event.getLocation());
         let posIndex =this.getTouchIndex(pos);
         if(this._selectChess != null && posIndex != -1 
-        &&this.chessArray[posIndex] == null && this._roundPlayerColor == this._selectChess.color)
+        &&this.isPosEmpty(posIndex)==true && this._roundPlayerColor == this._selectChess.color)
         {
             let chessPos = this._selectChess.getPosIndex();
             let delta = Math.abs(chessPos-posIndex);
             if(delta==1 || delta == 4)
             {
-                this.chessArray[chessPos] = null;
+                let temp = (this._roundPlayerColor ==global.GameColor.white )?this.chessMapWihte:this.chessMapBlack;
+                temp.delete(chessPos);
                 this._selectChess.node.position = this._chessPos[posIndex];
                 this._selectChess.setPosIndex(posIndex);
-                this.chessArray[posIndex] = this._selectChess;
+                temp.set(posIndex,this._selectChess)
                 this._selectChess = null;
                 this.changeColor();
             }
@@ -156,21 +159,24 @@ cc.Class({
     {
         let obj;
         let color;
+        let tempMap;
         if(isBlack == false)
         {
             color = 0;
             obj = cc.instantiate(this.chessNode);
+            tempMap = this.chessMapWihte;
         }
         else
         {
             color = 1;
             obj = cc.instantiate(this.chessNodeBlack);
+            tempMap = this.chessMapBlack;
         }
         let script = obj.getComponent('chessNode');
         script.initNode(index,this,color);
         obj.parent = this.boardNode;
         obj.position = this._chessPos[index];
-        this.chessArray[index] = script;
+        tempMap.set(index,script);
     },
 
     onStart:function()
@@ -178,25 +184,25 @@ cc.Class({
         this.initBoardChess();
     },
 
-    isShootChess:function(currentIndex)
+    //是否吃掉棋子
+    isShootChess:function(currentIndex,myColor)
     {
-        let myColor = this._roundPlayerColor;
         //判断横向
         let horizontal = currentIndex%4;
-        let result = false;
+        let resultH = false;
         switch (horizontal) 
         {
             case 0:
-                result =this.shoot(currentIndex,1,1,3);
+                resultH =this.shoot(currentIndex,1,1,3);
                 break;
             case 1:
-                result =this.shoot(currentIndex,1,1,-1);
+                resultH =this.shoot(currentIndex,1,1,-1);
                 break;
             case 2:
-                result =this.shoot(currentIndex,-1,1,1);
+                resultH =this.shoot(currentIndex,-1,1,1);
                 break;
             case 3:
-                result =this.shoot(currentIndex,-1,1,-3);
+                resultH =this.shoot(currentIndex,-1,1,-3);
                 break;
             default:
                 break;
@@ -204,31 +210,32 @@ cc.Class({
 
         //纵向
         let vertical = currentIndex/4;
+        let resultV = false;
         switch (vertical) 
         {
             case 0:
-                result =this.shoot(currentIndex,1,4,12);
+                resultV =this.shoot(currentIndex,1,4,12);
                 break;
             case 1:
-                result =this.shoot(currentIndex,1,4,-4);
+                resultV =this.shoot(currentIndex,1,4,-4);
                 break;
             case 2:
-                result =this.shoot(currentIndex,-1,4,4);
+                resultV =this.shoot(currentIndex,-1,4,4);
                 break;
             case 3:
-                result =this.shoot(currentIndex,-1,4,-12);
+                resultV =this.shoot(currentIndex,-1,4,-12);
                 break;
             default:
                 break;
         }
 
-        return result;
+        return [resultH,resultV];
     },
 
     shoot:function(currentIndex,flag,delta,emptyDelta)
     {
         if(this.isEnemyChess(currentIndex+flag*delta,myColor)== true&&this.isEnemyChess(currentIndex+flag*2*delta,myColor)== true
-        &&this.ifPosEmpty(currentIndex+emptyDelta)== true)
+        &&this.isPosEmpty(currentIndex+emptyDelta)== true)
         {
             return true;
         } 
@@ -237,19 +244,25 @@ cc.Class({
 
     isEnemyChess:function(pos,mycolor)
     {
-        let enemyColor = (mycolor==global.GameColor.black)?global.GameColor.white:global.GameColor.black
-        if(this.chessArray[pos]!= null && enemyColor ==this.chessArray[pos].color)
+        if(mycolor==global.GameColor.black)
         {
-            return true
+            if(this.chessMapWihte.has(pos))
+            {
+                return true;
+            }
         }
         else{
-            return false
+            if(this.chessMapBlack.has(pos))
+            {
+                return true;
+            }
         }
+        return false;
     },
     
-    ifPosEmpty:function(pos)
+    isPosEmpty:function(pos)
     {
-        if(this.chessArray[pos]!= null)
+        if(this.chessMapBlack.has(pos)||this.chessMapWihte.has(pos))
         {
             return false;
         }
@@ -258,36 +271,77 @@ cc.Class({
         }
     },
     
-    isGameOver:function()
+    isChessSourround:function(index)
     {
-        //一方剩一颗棋子
+        let tempIndex = index+4;
+        //上
+        if(tempIndex<16 && this.isPosEmpty(tempIndex))
+        {
+            return false;
+        }
+        tempIndex = index-4;
+        //下
+        if(tempIndex>=0 && this.isPosEmpty(tempIndex))
+        {
+            return false;
+        }
+        tempIndex = index-1;
+        //左
+        if(index%4!=0 && this.isPosEmpty(tempIndex))
+        {
+            return false;
+        }
+        tempIndex = index+1;
+        //右
+        if((index+1)%4!=0 && this.isPosEmpty(tempIndex))
+        {
+            return false;
+        }
+        return true;
+    },
+    
+    isGameOver:function(array)
+    {
         let whiteNum=0;
-        let blackNum =0;
-        for (let index = 0; index < this.chessArray.length; index++) {
-            const element = array[index];
-            if(element)
+        let blackNum =0; 
+        let surroundChessWhite =0;
+        let surroundChessBlack =0;
+
+        for (const value of this.chessMapBlack.keys()) {
+            if(this.isChessSourround(value)== true)
             {
-                if(element.color ==global.GameColor.black)
-                {
-                    blackNum =blackNum+1;
-                }
-                else{
-                    whiteNum =whiteNum+1;
-                }
+                surroundChessBlack++;
+            }
+        }
+        for (const value of this.chessMapWihte.keys()) {
+            if(this.isChessSourround(value)== true)
+            {
+                surroundChessWhite++;
             }
         }
 
-        if(blackNum<=1)
+        //一方剩一颗棋子
+        if(this.chessMapBlack.size<=1)
         {
             return true;
         }
-        if(whiteNum<=1)
+        if(this.chessMapWihte.size<=1)
         {
             return true;
         }
 
         //被围住
-        
+        if(surroundChessBlack == this.chessMapBlack.size)
+        {
+            return true;
+        }
+
+        if(surroundChessWhite == this.chessMapWihte.size)
+        {
+            return true;
+        }
+
         return false;
     },
+    
 });
